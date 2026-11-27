@@ -17,7 +17,48 @@
         <h1>Агенты для анализа страниц</h1>
       </div>
     </div>
+    <div class="account-wrap">
+      <button type="button" id="account-button" class="button ghost" hidden>admin</button>
+      <div id="account-menu" class="account-menu panel" hidden>
+        <form id="password-form">
+          <label class="field" for="current-password">
+            <span>Текущий пароль</span>
+            <input id="current-password" type="password" autocomplete="current-password" required>
+          </label>
+          <label class="field" for="new-password">
+            <span>Новый пароль</span>
+            <input id="new-password" type="password" autocomplete="new-password" required>
+          </label>
+          <button type="submit" class="button primary password-submit">Сменить пароль</button>
+        </form>
+        <div class="password-actions">
+          <button type="button" id="password-cancel" class="button ghost">Отмена</button>
+          <button type="button" id="logout-button" class="button ghost">Выйти</button>
+        </div>
+        <p id="account-status" class="status" role="status"></p>
+      </div>
+    </div>
   </header>
+  <div id="auth-screen" class="auth-screen">
+    <form id="auth-form" class="panel auth-card">
+      <h2 id="auth-title">Вход</h2>
+      <p id="auth-lead">Введите логин и пароль.</p>
+      <label class="field" for="auth-login">
+        <span>Логин</span>
+        <input id="auth-login" type="text" maxlength="64" autocomplete="username" required>
+      </label>
+      <label class="field" for="auth-password">
+        <span>Пароль</span>
+        <input id="auth-password" type="password" maxlength="200" autocomplete="current-password" required>
+      </label>
+      <div id="auth-terms" class="terms" hidden></div>
+      <p id="auth-status" class="status" role="status"></p>
+      <div class="row">
+        <button type="submit" id="auth-submit" class="button primary">Войти</button>
+        <button type="button" id="auth-back" class="button ghost" hidden>Назад ко входу</button>
+      </div>
+    </form>
+  </div>
   <main>
     <div class="controls">
       <section class="panel agent-panel" aria-labelledby="agents-title">

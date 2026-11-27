@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     proxyapi_base_url: str = ""
     proxyapi_model: str = ""
     database_path: str = "data/agents.db"
+    admin_password: str = ""
+    session_secret: str = ""
     logtail_source_token: str = ""
     logtail_host: str = ""
 
