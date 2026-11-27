@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
   <meta name="robots" content="noindex">
   <title>Агенты — анализ страниц</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231f6b4a'/%3E%3C/svg%3E">
@@ -20,17 +20,7 @@
     <div class="account-wrap">
       <button type="button" id="account-button" class="button ghost" hidden>admin</button>
       <div id="account-menu" class="account-menu panel" hidden>
-        <form id="password-form">
-          <label class="field" for="current-password">
-            <span>Текущий пароль</span>
-            <input id="current-password" type="password" autocomplete="current-password" required>
-          </label>
-          <label class="field" for="new-password">
-            <span>Новый пароль</span>
-            <input id="new-password" type="password" autocomplete="new-password" required>
-          </label>
-          <button type="submit" class="button primary password-submit">Сменить пароль</button>
-        </form>
+        <div id="password-slot"></div>
         <div class="password-actions">
           <button type="button" id="password-cancel" class="button ghost">Отмена</button>
           <button type="button" id="logout-button" class="button ghost">Выйти</button>
@@ -49,7 +39,7 @@
       </label>
       <label class="field" for="auth-password">
         <span>Пароль</span>
-        <input id="auth-password" type="password" maxlength="200" autocomplete="current-password" required>
+        <input id="auth-password" type="password" maxlength="200" autocomplete="current-password" required readonly>
       </label>
       <div id="auth-terms" class="terms" hidden></div>
       <p id="auth-status" class="status" role="status"></p>
@@ -126,6 +116,19 @@
       </section>
     </div>
   </main>
+  <template id="password-form-template">
+    <form id="password-form">
+      <label class="field" for="current-password">
+        <span>Текущий пароль</span>
+        <input id="current-password" type="password" autocomplete="current-password" required>
+      </label>
+      <label class="field" for="new-password">
+        <span>Новый пароль</span>
+        <input id="new-password" type="password" autocomplete="new-password" required>
+      </label>
+      <button type="submit" class="button primary password-submit">Сменить пароль</button>
+    </form>
+  </template>
   <script src="/static/app.js"></script>
 </body>
 </html>

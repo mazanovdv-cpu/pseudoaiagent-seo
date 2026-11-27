@@ -33,7 +33,7 @@ docker compose up --build
 docker compose down
 ```
 
-База хранится в Docker-томе `seo-data`, файл внутри контейнера — `/app/data/agents.db`. Это тот же том, что у прежнего контейнера на VPS. Чтобы удалить агентов вместе с томом: `docker compose down -v`.
+База хранится в Docker-томе `seo-data`, файл внутри контейнера — `/app/data/agents.db`. Это тот же том, что у прежнего контейнера на VPS: в `compose.yaml` он объявлен как `external`, Compose его не создаёт и `docker compose down -v` его не удаляет. Если тома ещё нет: `docker volume create seo-data`. Удалить агентов вместе с томом можно только командой `docker volume rm seo-data` после остановки контейнеров.
 
 Снаружи открыт только frontend: `127.0.0.1:8030` проксируется на Nginx (порт 80). Backend в интернет не публикуется. На VPS файл окружения уже лежит в `/root/My_project/pseudoaiagent-seo/.env`: запускайте Compose из этого каталога, тогда `env_file: .env` совпадает с прежним `--env-file`. Перед первым `docker compose up` остановите старый контейнер `pseudoaiagent-seo`, имя занято frontend.
 
