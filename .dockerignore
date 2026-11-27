@@ -1,0 +1,13 @@
+.git
+**/.venv
+.venv
+venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+.pytest_cache
+.mypy_cache
+.env
+data
+**/*.db
+.DS_Store

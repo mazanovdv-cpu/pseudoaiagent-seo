@@ -1,0 +1,53 @@
+services:
+  backend:
+    image: mdv10072026/pseudoaiagent-seo-backend:latest
+    container_name: pseudoaiagent-seo-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /app/data/agents.db
+    volumes:
+      - seo-data:/app/data
+    expose:
+      - "8000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    image: mdv10072026/pseudoaiagent-seo-frontend:latest
+    container_name: pseudoaiagent-seo
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "127.0.0.1:8030:80"
+    environment:
+      EXPOSE_API_DOCS: "0"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  seo-data:
+    name: seo-data

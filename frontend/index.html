@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Агенты — анализ страниц</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231f6b4a'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">А</span>
+      <div>
+        <p class="eyebrow">Локальная платформа</p>
+        <h1>Агенты для анализа страниц</h1>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div class="controls">
+      <section class="panel agent-panel" aria-labelledby="agents-title">
+        <div class="panel-head">
+          <h2 id="agents-title">Агент</h2>
+          <button type="button" id="configure-agent" class="button ghost">Настройки агентов</button>
+        </div>
+        <label class="field" for="agent-select">
+          <span>Сохранённые агенты</span>
+          <select id="agent-select"></select>
+        </label>
+        <div id="agent-editor" hidden>
+          <div class="row">
+            <button type="button" id="new-agent" class="button ghost">+ Добавить нового агента</button>
+            <button type="button" id="delete-agent" class="button ghost danger">Удалить агента</button>
+          </div>
+          <label class="field" for="agent-name">
+            <span>Название</span>
+            <input id="agent-name" type="text" maxlength="200" autocomplete="off" placeholder="Например, Редактор структуры">
+          </label>
+          <label class="field" for="system-prompt">
+            <span>Системный промт</span>
+            <textarea id="system-prompt" maxlength="20000" placeholder="Роль и задача агента"></textarea>
+          </label>
+          <p class="hint">Если имя уже есть, сохранение обновит промт. Новое имя создаст агента. Служебный протокол мыслей и действий к промту добавляется только в момент запуска.</p>
+          <div class="row">
+            <button type="button" id="save-agent" class="button primary">Сохранить агента</button>
+            <button type="button" id="cancel-create" class="button ghost" hidden>Отмена</button>
+          </div>
+        </div>
+        <p id="form-status" class="status" role="status"></p>
+      </section>
+      <section class="panel run-panel" aria-labelledby="run-title">
+        <div class="panel-head">
+          <h2 id="run-title">Анализ</h2>
+          <div class="row">
+            <button type="submit" form="analyze-form" id="run-agent" class="button primary">Запустить агента</button>
+            <button type="button" id="stop-agent" class="button ghost" hidden>Остановить</button>
+          </div>
+        </div>
+        <form id="analyze-form">
+          <label class="field" for="page-url">
+            <span>Адрес страницы</span>
+            <input id="page-url" type="text" inputmode="url" autocomplete="off" required placeholder="https://example.com">
+          </label>
+        </form>
+        <p id="run-status" class="status" role="status"></p>
+      </section>
+    </div>
+    <section class="panel log-panel" aria-labelledby="log-title">
+      <h2 id="log-title">Ход работы</h2>
+      <div id="log" class="log" aria-live="polite">
+        <p class="placeholder">Здесь появятся мысли агента и промежуточные действия.</p>
+      </div>
+    </section>
+    <div class="workspace">
+      <section class="panel result-panel" aria-labelledby="result-title">
+        <div class="panel-head">
+          <h2 id="result-title">Результат</h2>
+          <button type="button" id="save-report" class="button ghost" disabled>Сохранить отчет</button>
+        </div>
+        <div id="result" class="result" aria-live="polite">
+          <p class="placeholder">Итог появится здесь, когда агент закончит.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

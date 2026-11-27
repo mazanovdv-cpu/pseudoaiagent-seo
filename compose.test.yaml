@@ -1,0 +1,8 @@
+services:
+  backend:
+    environment:
+      PROXYAPI_KEY: local-test
+      PROXYAPI_BASE_URL: http://host.docker.internal:8099/v1
+      PROXYAPI_MODEL: mock-model
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
