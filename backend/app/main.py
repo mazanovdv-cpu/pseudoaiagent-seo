@@ -16,11 +16,18 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth import (
+    clear_session,
+    hash_password,
+    read_session_user_id,
+    verify_password,
+    write_session,
+)
 from app.config import ensure_llm, get_settings
 from app.logging_setup import configure_logtail, flush_logs
-from app.database import get_db, init_db, session_scope
+from app.database import copy_agents_from_admin, find_user, get_db, init_db, session_scope
 from app.dynamic_agent import DynamicAgent
-from app.models import Agent
+from app.models import Agent, User
 from app.report import build_report_pdf
 from app.schemas import (
     AgentDetail,
@@ -28,7 +35,10 @@ from app.schemas import (
     AgentSaved,
     AgentUpsert,
     AnalyzeRequest,
+    Credentials,
+    PasswordChange,
     ReportRequest,
+    UserPublic,
 )
 
 logging.basicConfig(
@@ -99,15 +109,30 @@ def to_sse(event: dict) -> str:
     return sse("log", event)
 
 
-def load_agent(agent_id: int | None, agent_name: str | None) -> tuple[str, str]:
+def current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    user_id = read_session_user_id(request)
+    user = None if user_id is None else db.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Требуется вход")
+    return user
+
+
+def load_agent(user_id: int, agent_id: int | None, agent_name: str | None) -> tuple[str, str]:
     if agent_id is None and not (agent_name and agent_name.strip()):
         raise ValueError("Укажите агента")
     with session_scope() as db:
         agent = None
         if agent_id is not None:
             agent = db.get(Agent, agent_id)
+            if agent is not None and agent.user_id != user_id:
+                agent = None
         else:
-            agent = db.scalar(select(Agent).where(Agent.name == agent_name.strip()))
+            agent = db.scalar(
+                select(Agent).where(
+                    Agent.user_id == user_id,
+                    Agent.name == agent_name.strip(),
+                )
+            )
         if agent is None:
             raise ValueError("Агент не найден")
         return agent.name, agent.system_prompt
@@ -115,13 +140,14 @@ def load_agent(agent_id: int | None, agent_name: str | None) -> tuple[str, str]:
 
 async def analyze_events(
     request: Request,
+    user_id: int,
     url: str,
     agent_id: int | None,
     agent_name: str | None,
 ):
     yield ": connected\n\n"
     try:
-        name, prompt = load_agent(agent_id, agent_name)
+        name, prompt = load_agent(user_id, agent_id, agent_name)
         settings = get_settings()
         ensure_llm(settings)
         agent = DynamicAgent(
@@ -155,24 +181,101 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.post("/api/auth/login", response_model=UserPublic)
+def login(payload: Credentials, response: Response, db: Session = Depends(get_db)) -> User:
+    user = find_user(db, payload.login)
+    if user is None:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+    if not verify_password(payload.password, user.password_salt, user.password_hash):
+        raise HTTPException(status_code=401, detail="Неверный пароль")
+    write_session(response, user.id)
+    return user
+
+
+@app.post("/api/auth/register", response_model=UserPublic)
+def register(payload: Credentials, response: Response, db: Session = Depends(get_db)) -> User:
+    if find_user(db, payload.login) is not None:
+        raise HTTPException(status_code=409, detail="Такой логин уже зарегистрирован")
+    salt, digest = hash_password(payload.password)
+    user = User(login=payload.login, password_salt=salt, password_hash=digest)
+    db.add(user)
+    try:
+        db.flush()
+        copy_agents_from_admin(db, user)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Такой логин уже зарегистрирован") from exc
+    db.refresh(user)
+    write_session(response, user.id)
+    return user
+
+
+@app.get("/api/auth/me", response_model=UserPublic)
+def me(user: User = Depends(current_user)) -> User:
+    return user
+
+
+@app.post("/api/auth/logout", status_code=204)
+def logout() -> Response:
+    response = Response(status_code=204)
+    clear_session(response)
+    return response
+
+
+@app.post("/api/auth/password", response_model=UserPublic)
+def change_password(
+    payload: PasswordChange,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    stored = db.get(User, user.id)
+    if stored is None or not verify_password(
+        payload.current_password,
+        stored.password_salt,
+        stored.password_hash,
+    ):
+        raise HTTPException(status_code=401, detail="Неверный текущий пароль")
+    salt, digest = hash_password(payload.new_password)
+    stored.password_salt = salt
+    stored.password_hash = digest
+    db.commit()
+    db.refresh(stored)
+    return stored
+
+
 @app.get("/api/agents", response_model=list[AgentListItem])
-def list_agents(db: Session = Depends(get_db)) -> list[Agent]:
-    return list(db.scalars(select(Agent).order_by(Agent.id)))
+def list_agents(user: User = Depends(current_user), db: Session = Depends(get_db)) -> list[Agent]:
+    return list(db.scalars(select(Agent).where(Agent.user_id == user.id).order_by(Agent.id)))
 
 
 @app.get("/api/agents/{agent_id}", response_model=AgentDetail)
-def get_agent(agent_id: int, db: Session = Depends(get_db)) -> Agent:
+def get_agent(
+    agent_id: int,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Agent:
     agent = db.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or agent.user_id != user.id:
         raise HTTPException(status_code=404, detail="Агент не найден")
     return agent
 
 
 @app.post("/api/agents", response_model=AgentSaved)
-def save_agent(payload: AgentUpsert, db: Session = Depends(get_db)) -> dict:
-    existing = db.scalar(select(Agent).where(Agent.name == payload.name))
+def save_agent(
+    payload: AgentUpsert,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    existing = db.scalar(
+        select(Agent).where(Agent.user_id == user.id, Agent.name == payload.name)
+    )
     if existing is None:
-        existing = Agent(name=payload.name, system_prompt=payload.system_prompt)
+        existing = Agent(
+            user_id=user.id,
+            name=payload.name,
+            system_prompt=payload.system_prompt,
+        )
         db.add(existing)
         action = "created"
     else:
@@ -193,9 +296,13 @@ def save_agent(payload: AgentUpsert, db: Session = Depends(get_db)) -> dict:
 
 
 @app.delete("/api/agents/{agent_id}", status_code=204)
-def delete_agent(agent_id: int, db: Session = Depends(get_db)) -> Response:
+def delete_agent(
+    agent_id: int,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> Response:
     agent = db.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or agent.user_id != user.id:
         raise HTTPException(status_code=404, detail="Агент не найден")
     db.delete(agent)
     db.commit()
@@ -208,25 +315,30 @@ async def analyze_get(
     url: str,
     agent_id: Optional[int] = None,
     agent_name: Optional[str] = None,
+    user: User = Depends(current_user),
 ) -> StreamingResponse:
     return StreamingResponse(
-        analyze_events(request, url.strip(), agent_id, agent_name),
+        analyze_events(request, user.id, url.strip(), agent_id, agent_name),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
 
 
 @app.post("/api/analyze")
-async def analyze_post(request: Request, payload: AnalyzeRequest) -> StreamingResponse:
+async def analyze_post(
+    request: Request,
+    payload: AnalyzeRequest,
+    user: User = Depends(current_user),
+) -> StreamingResponse:
     return StreamingResponse(
-        analyze_events(request, payload.url, payload.agent_id, payload.agent_name),
+        analyze_events(request, user.id, payload.url, payload.agent_id, payload.agent_name),
         media_type="text/event-stream",
         headers=SSE_HEADERS,
     )
 
 
 @app.post("/api/report")
-def download_report(payload: ReportRequest) -> Response:
+def download_report(payload: ReportRequest, _user: User = Depends(current_user)) -> Response:
     try:
         pdf = build_report_pdf(payload.text, payload.title)
     except Exception as exc:

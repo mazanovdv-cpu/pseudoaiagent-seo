@@ -190,6 +190,28 @@ function clearLog() {
   liveThought = null;
 }
 
+function beginRequestLog(url) {
+  liveThought = null;
+  const hasHistory = Boolean(logEl.querySelector(".log-line, .log-separator"));
+  const placeholder = logEl.querySelector(".placeholder");
+  if (placeholder) placeholder.remove();
+  if (hasHistory) {
+    const separator = document.createElement("div");
+    separator.className = "log-separator";
+    separator.setAttribute("role", "separator");
+    logEl.appendChild(separator);
+  }
+  const stamp = new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date());
+  addLine("status", "Запрос", `${stamp} · ${url}`);
+}
+
 function addLine(kind, tag, text) {
   const placeholder = logEl.querySelector(".placeholder");
   if (placeholder) placeholder.remove();
@@ -391,11 +413,12 @@ function startAnalysis() {
   finished = false;
   sawError = false;
   resultRaw = "";
-  clearLog();
+  beginRequestLog(url);
   renderResult();
   setRunning(true);
   runStatus.textContent = "Идёт анализ…";
-  addLine("status", "Ход", "Подключение к агенту…");
+  const agentName = selectEl.selectedOptions[0]?.textContent.trim() || "";
+  addLine("status", "Ход", `Подключение к агенту «${agentName}»`);
   const endpoint = `/api/analyze?url=${encodeURIComponent(url)}&agent_id=${encodeURIComponent(selectEl.value)}`;
   source = new EventSource(endpoint);
   source.addEventListener("log", (event) => {
@@ -468,6 +491,161 @@ saveReportBtn.addEventListener("click", () => {
   saveReport();
 });
 
-loadAgents().catch(() => {
-  formStatus.textContent = "Сервер агентов недоступен.";
+const authScreen = document.querySelector("#auth-screen");
+const authForm = document.querySelector("#auth-form");
+const authTitle = document.querySelector("#auth-title");
+const authLead = document.querySelector("#auth-lead");
+const authLogin = document.querySelector("#auth-login");
+const authPassword = document.querySelector("#auth-password");
+const authTerms = document.querySelector("#auth-terms");
+const authStatus = document.querySelector("#auth-status");
+const authSubmit = document.querySelector("#auth-submit");
+const authBack = document.querySelector("#auth-back");
+const passwordCancel = document.querySelector("#password-cancel");
+const accountButton = document.querySelector("#account-button");
+const accountMenu = document.querySelector("#account-menu");
+const accountStatus = document.querySelector("#account-status");
+const passwordForm = document.querySelector("#password-form");
+const logoutButton = document.querySelector("#logout-button");
+
+let authMode = "login";
+
+function showAuth(mode) {
+  authMode = mode;
+  authScreen.hidden = false;
+  accountButton.hidden = true;
+  accountMenu.hidden = true;
+  authTerms.hidden = mode !== "register";
+  authBack.hidden = mode !== "register";
+  authLead.hidden = mode === "register";
+  authTitle.textContent = mode === "register" ? "Регистрация" : "Вход";
+  authLead.textContent = "Введите логин и пароль.";
+  authSubmit.textContent = mode === "register" ? "Зарегистрироваться" : "Войти";
+  authPassword.autocomplete = mode === "register" ? "new-password" : "current-password";
+}
+
+function showApp(login) {
+  authScreen.hidden = true;
+  accountButton.hidden = false;
+  accountButton.textContent = login;
+  accountMenu.hidden = true;
+  accountStatus.textContent = "";
+}
+
+async function enterApp(login) {
+  showApp(login);
+  clearLog();
+  resultRaw = "";
+  renderResult();
+  await loadAgents();
+}
+
+async function loadTerms() {
+  try {
+    const response = await fetch("/static/terms.md", { cache: "no-store" });
+    if (!response.ok) throw new Error("terms");
+    authTerms.innerHTML = renderMarkdown(await response.text());
+  } catch (_error) {
+    authTerms.textContent = "Не удалось загрузить условия использования.";
+  }
+}
+
+async function boot() {
+  await loadTerms();
+  const response = await fetch("/api/auth/me", { cache: "no-store" });
+  if (!response.ok) {
+    showAuth("login");
+    return;
+  }
+  const data = await response.json();
+  showApp(data.login);
+  await loadAgents();
+}
+
+authForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  authStatus.textContent = "";
+  authSubmit.disabled = true;
+  const payload = { login: authLogin.value.trim(), password: authPassword.value };
+  try {
+    const endpoint = authMode === "register" ? "/api/auth/register" : "/api/auth/login";
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => null);
+    if (response.status === 404 && authMode === "login") {
+      showAuth("register");
+      return;
+    }
+    if (!response.ok) {
+      authStatus.textContent = errorMessage(data);
+      return;
+    }
+    authPassword.value = "";
+    await enterApp(data.login);
+  } catch (_error) {
+    authStatus.textContent = "Нет связи с сервером.";
+  } finally {
+    authSubmit.disabled = false;
+  }
+});
+
+authBack.addEventListener("click", () => {
+  authStatus.textContent = "";
+  showAuth("login");
+});
+
+accountButton.addEventListener("click", () => {
+  accountMenu.hidden = !accountMenu.hidden;
+  accountStatus.textContent = "";
+});
+
+passwordCancel.addEventListener("click", () => {
+  passwordForm.reset();
+  accountStatus.textContent = "";
+  accountMenu.hidden = true;
+});
+
+passwordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  accountStatus.textContent = "";
+  try {
+    const response = await fetch("/api/auth/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_password: document.querySelector("#current-password").value,
+        new_password: document.querySelector("#new-password").value,
+      }),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      accountStatus.textContent = errorMessage(data);
+      return;
+    }
+    passwordForm.reset();
+    accountStatus.textContent = "Пароль изменён.";
+  } catch (_error) {
+    accountStatus.textContent = "Нет связи с сервером.";
+  }
+});
+
+logoutButton.addEventListener("click", async () => {
+  if (source) stopAnalysis();
+  await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+  clearLog();
+  resultRaw = "";
+  renderResult();
+  selectEl.innerHTML = "";
+  authLogin.value = "";
+  authPassword.value = "";
+  authStatus.textContent = "";
+  showAuth("login");
+});
+
+boot().catch(() => {
+  showAuth("login");
+  authStatus.textContent = "Сервер недоступен.";
 });

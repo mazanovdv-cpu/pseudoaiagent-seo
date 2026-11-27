@@ -47,6 +47,32 @@ class ReportRequest(BaseModel):
         return _clean(value)
 
 
+class Credentials(BaseModel):
+    login: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=1, max_length=200)
+
+    @field_validator("login", "password")
+    @classmethod
+    def strip_credentials(cls, value: str) -> str:
+        return _clean(value)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=1, max_length=200)
+
+    @field_validator("current_password", "new_password")
+    @classmethod
+    def strip_passwords(cls, value: str) -> str:
+        return _clean(value)
+
+
+class UserPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    login: str
+
+
 class AnalyzeRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2000)
     agent_id: Optional[int] = None

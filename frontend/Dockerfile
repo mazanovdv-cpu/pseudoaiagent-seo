@@ -4,7 +4,7 @@ ENV EXPOSE_API_DOCS=1
 
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY frontend/docs-access.sh /docker-entrypoint.d/10-docs-access.sh
-COPY frontend/index.html frontend/app.js frontend/style.css /usr/share/nginx/html/
+COPY frontend/index.html frontend/app.js frontend/style.css frontend/terms.md /usr/share/nginx/html/
 
 RUN chmod +x /docker-entrypoint.d/10-docs-access.sh
 
