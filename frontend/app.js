@@ -505,7 +505,8 @@ const passwordCancel = document.querySelector("#password-cancel");
 const accountButton = document.querySelector("#account-button");
 const accountMenu = document.querySelector("#account-menu");
 const accountStatus = document.querySelector("#account-status");
-const passwordForm = document.querySelector("#password-form");
+const passwordSlot = document.querySelector("#password-slot");
+const passwordTemplate = document.querySelector("#password-form-template");
 const logoutButton = document.querySelector("#logout-button");
 
 let authMode = "login";
@@ -515,6 +516,7 @@ function showAuth(mode) {
   authScreen.hidden = false;
   accountButton.hidden = true;
   accountMenu.hidden = true;
+  unmountPasswordForm();
   authTerms.hidden = mode !== "register";
   authBack.hidden = mode !== "register";
   authLead.hidden = mode === "register";
@@ -522,7 +524,15 @@ function showAuth(mode) {
   authLead.textContent = "Введите логин и пароль.";
   authSubmit.textContent = mode === "register" ? "Зарегистрироваться" : "Войти";
   authPassword.autocomplete = mode === "register" ? "new-password" : "current-password";
+  authPassword.readOnly = true;
 }
+
+function unlockPassword(event) {
+  event.target.readOnly = false;
+}
+
+authPassword.addEventListener("focus", unlockPassword);
+authPassword.addEventListener("pointerdown", unlockPassword);
 
 function showApp(login) {
   authScreen.hidden = true;
@@ -530,6 +540,7 @@ function showApp(login) {
   accountButton.textContent = login;
   accountMenu.hidden = true;
   accountStatus.textContent = "";
+  unmountPasswordForm();
 }
 
 async function enterApp(login) {
@@ -564,8 +575,9 @@ async function boot() {
 
 authForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  authStatus.textContent = "";
+  authStatus.textContent = "Проверяю пароль…";
   authSubmit.disabled = true;
+  authPassword.readOnly = false;
   const payload = { login: authLogin.value.trim(), password: authPassword.value };
   try {
     const endpoint = authMode === "register" ? "/api/auth/register" : "/api/auth/login";
@@ -576,6 +588,7 @@ authForm.addEventListener("submit", async (event) => {
     });
     const data = await response.json().catch(() => null);
     if (response.status === 404 && authMode === "login") {
+      authStatus.textContent = "";
       showAuth("register");
       return;
     }
@@ -600,36 +613,52 @@ authBack.addEventListener("click", () => {
 accountButton.addEventListener("click", () => {
   accountMenu.hidden = !accountMenu.hidden;
   accountStatus.textContent = "";
+  if (accountMenu.hidden) unmountPasswordForm();
+  else mountPasswordForm();
 });
+
+function unmountPasswordForm() {
+  passwordSlot.replaceChildren();
+}
+
+function mountPasswordForm() {
+  if (document.querySelector("#password-form")) return;
+  passwordSlot.appendChild(passwordTemplate.content.cloneNode(true));
+  document.querySelector("#password-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    accountStatus.textContent = "Меняю пароль…";
+    const submit = event.target.querySelector("button[type=submit]");
+    submit.disabled = true;
+    try {
+      const response = await fetch("/api/auth/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_password: document.querySelector("#current-password").value,
+          new_password: document.querySelector("#new-password").value,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        accountStatus.textContent = errorMessage(data);
+        return;
+      }
+      unmountPasswordForm();
+      mountPasswordForm();
+      accountStatus.textContent = "Пароль изменён.";
+    } catch (_error) {
+      accountStatus.textContent = "Нет связи с сервером.";
+    } finally {
+      const next = document.querySelector("#password-form button[type=submit]");
+      if (next) next.disabled = false;
+    }
+  });
+}
 
 passwordCancel.addEventListener("click", () => {
-  passwordForm.reset();
+  unmountPasswordForm();
   accountStatus.textContent = "";
   accountMenu.hidden = true;
-});
-
-passwordForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  accountStatus.textContent = "";
-  try {
-    const response = await fetch("/api/auth/password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        current_password: document.querySelector("#current-password").value,
-        new_password: document.querySelector("#new-password").value,
-      }),
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      accountStatus.textContent = errorMessage(data);
-      return;
-    }
-    passwordForm.reset();
-    accountStatus.textContent = "Пароль изменён.";
-  } catch (_error) {
-    accountStatus.textContent = "Нет связи с сервером.";
-  }
 });
 
 logoutButton.addEventListener("click", async () => {
